@@ -42,12 +42,12 @@ typedef std::unordered_map<std::string, FnInfo> FnTable;
 
 #define ORCH_LOG(LEVEL, MESSAGE) \
   if (LEVEL == ORCH_VERBOSE) { \
-    \
+    std::cout << MESSAGE << std::endl; \
   } else if (LEVEL == ORCH_FATAL) { \
     std::cerr << "fatal error occured: " << MESSAGE << std::endl; \
     std::exit(1); \
   } else if (LEVEL == ORCH_DEBUG) { \
-    \
+    std::cout << MESSAGE << std::endl; \
   } else { \
     std::cout << MESSAGE << std::endl; \
   }
