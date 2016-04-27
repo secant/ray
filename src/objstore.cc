@@ -271,7 +271,7 @@ void ObjStoreService::process_requests() {
           process_worker_request(request);
         }
         break;
-      case ObjRequestType::WORKER_DONE:
+      case ObjRequestType::WORKER_DONE: {
           ORCH_LOG(ORCH_VERBOSE, "Finalizing object with objref " << request.objref << " on object store " << objstoreid_);
           process_worker_request(request);
         }
