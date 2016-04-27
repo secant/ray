@@ -262,14 +262,17 @@ void ObjStoreService::process_requests() {
     recv_queue_.receive(&request);
     switch (request.type) {
       case ObjRequestType::ALLOC: {
+          ORCH_LOG(ORCH_VERBOSE, "Allocating object with objref " << request.objref << "and size " << request.size << " on object store " << objstoreid_);
           process_worker_request(request);
         }
         break;
       case ObjRequestType::GET: {
+          ORCH_LOG(ORCH_VERBOSE, "Getting object with objref " << request.objref << " from object store " << objstoreid_);
           process_worker_request(request);
         }
         break;
-      case ObjRequestType::WORKER_DONE: {
+      case ObjRequestType::WORKER_DONE:
+          ORCH_LOG(ORCH_VERBOSE, "Finalizing object with objref " << request.objref << " on object store " << objstoreid_);
           process_worker_request(request);
         }
         break;
