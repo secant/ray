@@ -94,7 +94,7 @@ def start_node(scheduler_address, node_ip_address, num_workers, worker_path=None
   objstore_address = address(node_ip_address, new_objstore_port())
   start_objstore(scheduler_address, objstore_address)
   time.sleep(0.2)
-  for _ in range(num_workers_per_objstore):
+  for _ in range(num_workers):
     start_worker(worker_path, scheduler_address, objstore_address, address(node_ip_address, new_worker_port()))
   time.sleep(0.3)
   orchpy.connect(scheduler_address, objstore_address, address(node_ip_address, new_worker_port()))
