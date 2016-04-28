@@ -1,5 +1,7 @@
 #include "objstore.h"
+
 #include <chrono>
+#include "utils.h"
 
 const size_t ObjStoreService::CHUNK_SIZE = 8 * 1024;
 
@@ -350,8 +352,11 @@ void start_objstore(const char* scheduler_addr, const char* objstore_addr) {
   std::string objstore_address(objstore_addr);
   ObjStoreService service(objstore_address, scheduler_channel);
   service.start_objstore_service();
+  std::string::iterator split_point = split_ip_address(objstore_address);
+  std::string port;
+  port.assign(split_point, objstore_address.end());
   ServerBuilder builder;
-  builder.AddListeningPort(std::string(objstore_addr), grpc::InsecureServerCredentials());
+  builder.AddListeningPort(std::string("0.0.0.0:") + port, grpc::InsecureServerCredentials());
   builder.RegisterService(&service);
   std::unique_ptr<Server> server(builder.BuildAndStart());
 
@@ -360,6 +365,7 @@ void start_objstore(const char* scheduler_addr, const char* objstore_addr) {
 
 int main(int argc, char** argv) {
   if (argc != 3) {
+    ORCH_LOG(ORCH_FATAL, "object store: expected two arguments (scheduler ip address and object store ip address)");
     return 1;
   }
 
