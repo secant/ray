@@ -92,7 +92,7 @@ def start_node(scheduler_address, node_ip_address, num_workers, worker_path=None
   :worker_path: path of the source code that will be run on the worker
   """
   objstore_address = address(node_ip_address, new_objstore_port())
-  start_objstore(objstore_address)
+  start_objstore(scheduler_address, objstore_address)
   time.sleep(0.2)
   for _ in range(num_workers_per_objstore):
     start_worker(worker_path, scheduler_address, objstore_address, address(node_ip_address, new_worker_port()))
