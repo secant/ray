@@ -100,16 +100,14 @@ def start_node(scheduler_address, node_ip_address, num_workers, worker_path=None
   orchpy.connect(scheduler_address, objstore_address, address(node_ip_address, new_worker_port()))
   time.sleep(0.5)
 
-def start_cluster(scheduler_address=None, objstore_address=None, return_drivers=False, num_objstores=1, num_workers_per_objstore=0, worker_path=None):
+def start_singlenode_cluster(return_drivers=False, num_objstores=1, num_workers_per_objstore=0, worker_path=None):
   global drivers
   if num_workers_per_objstore > 0 and worker_path is None:
     raise Exception("Attempting to start a cluster with {} workers per object store, but `worker_path` is None.".format(num_workers_per_objstore))
   if num_workers_per_objstore > 0 and num_objstores < 1:
     raise Exception("Attempting to start a cluster with {} workers per object store, but `num_objstores` is {}.".format(num_objstores))
-  if scheduler_address is None:
-    # Then start a scheduler
-    scheduler_address = address(IP_ADDRESS, new_scheduler_port())
-    start_scheduler(scheduler_address)
+  scheduler_address = address(IP_ADDRESS, new_scheduler_port())
+  start_scheduler(scheduler_address)
   time.sleep(0.1)
   objstore_addresses = []
   # create objstores
