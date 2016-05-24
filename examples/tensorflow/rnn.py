@@ -3,13 +3,13 @@ import numpy as np
 import tensorflow as tf
 
 batch_size = 499
-xdim = 5000
-h1dim = 5001
-h2dim = 5002
-h3dim = 5003
-h4dim = 5004
-h5dim = 5005
-ydim = 10006
+xdim = 500
+h1dim = 501
+h2dim = 502
+h3dim = 503
+h4dim = 504
+h5dim = 505
+ydim = 1006
 num_steps = 10
 x_in = tf.placeholder(tf.float32, [batch_size, xdim])
 h1_in = tf.placeholder(tf.float32, [batch_size, h1dim])
