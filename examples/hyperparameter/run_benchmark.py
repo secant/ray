@@ -23,9 +23,8 @@ import time
 op.connect("52.50.92.141:10001", "52.50.92.141:20001", "52.50.92.141:90899")
 
 results = []
-for stepsize in [1.0, 0.1, 0.01]:
-  for momentum in [0.9, 0.5, 0.1]:
-    results.append(hyperparameter.f([stepsize, momentum]))
+for duration in range(10):
+  results.append(hyperparameter.f(duration))
 
 for i in range(len(results)):
   op.pull(results[i])

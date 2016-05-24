@@ -4,7 +4,7 @@ import orchpy
 import time
 import numpy as np
 
-@orchpy.distributed([List[float]], [float])
-def f(params):
-  time.sleep(np.random.randint(10))
-  return 0
+@orchpy.distributed([int], [float])
+def f(duration):
+  time.sleep(duration)
+  return 0.0
