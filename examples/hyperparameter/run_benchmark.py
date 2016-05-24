@@ -22,9 +22,12 @@ import time
 
 op.connect("52.50.92.141:10001", "52.50.92.141:20001", "52.50.92.141:90899")
 
+start_time = time.time()
 results = []
 for duration in range(10):
   results.append(hyperparameter.f(duration))
 
 for i in range(len(results)):
   op.pull(results[i])
+end_time = time.time()
+print "Hyperparameter optimization, elapsed_time = {} seconds.".format(end_time - start_time)
