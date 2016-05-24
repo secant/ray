@@ -31,6 +31,9 @@ op.connect("52.50.92.141:10001", "52.50.92.141:20001", "52.50.92.141:90899")
 
 h1 = single.zeros([rnn.batch_size, rnn.h1dim], "float")
 h2 = single.zeros([rnn.batch_size, rnn.h2dim], "float")
+h3 = single.zeros([rnn.batch_size, rnn.h3dim], "float")
+h4 = single.zeros([rnn.batch_size, rnn.h4dim], "float")
+h5 = single.zeros([rnn.batch_size, rnn.h5dim], "float")
 
 inputs = [single.random.normal([rnn.batch_size, rnn.xdim]) for _ in range(rnn.num_steps)]
 outputs = []
@@ -55,11 +58,44 @@ start_time = time.time()
 for t in range(rnn.num_steps):
   h1 = rnn.first_layer(inputs[t], h1)
   h2 = rnn.second_layer(h1, h2)
-  outputs.append(rnn.third_layer(h2))
+  h3 = rnn.third_layer(h2, h3)
+op.pull(h3)
+end_time = time.time()
+print "Distributed RNN, 3 layer, elapsed_time = {} seconds.".format(end_time - start_time)
+
+start_time = time.time()
+for t in range(rnn.num_steps):
+  h1 = rnn.first_layer(inputs[t], h1)
+  h2 = rnn.second_layer(h1, h2)
+  h3 = rnn.third_layer(h2, h3)
+  h4 = rnn.fourth_layer(h3, h4)
+op.pull(h4)
+end_time = time.time()
+print "Distributed RNN, 4 layer, elapsed_time = {} seconds.".format(end_time - start_time)
+
+start_time = time.time()
+for t in range(rnn.num_steps):
+  h1 = rnn.first_layer(inputs[t], h1)
+  h2 = rnn.second_layer(h1, h2)
+  h3 = rnn.third_layer(h2, h3)
+  h4 = rnn.fourth_layer(h3, h4)
+  h5 = rnn.fifth_layer(h4, h5)
+op.pull(h5)
+end_time = time.time()
+print "Distributed RNN, 5 layer, elapsed_time = {} seconds.".format(end_time - start_time)
+
+start_time = time.time()
+for t in range(rnn.num_steps):
+  h1 = rnn.first_layer(inputs[t], h1)
+  h2 = rnn.second_layer(h1, h2)
+  h3 = rnn.third_layer(h2, h3)
+  h4 = rnn.fourth_layer(h3, h4)
+  h5 = rnn.fifth_layer(h4, h5)
+  outputs.append(rnn.sixth_layer(h5))
 for t in range(rnn.num_steps):
   op.pull(outputs[t])
 end_time = time.time()
-print "Distributed RNN, 3 layer, elapsed_time = {} seconds.".format(end_time - start_time)
+print "Distributed RNN, 6 layer, elapsed_time = {} seconds.".format(end_time - start_time)
 
 # Run monolithic RNN
 inputs = [np.random.normal(size=[rnn.batch_size, rnn.xdim]) for _ in range(rnn.num_steps)]
@@ -76,8 +112,24 @@ end_time = time.time()
 print "Monolithic RNN, 2 layer, elapsed_time = {} seconds.".format(end_time - start_time)
 
 start_time = time.time()
-outputs = rnn.sess.run(rnn.y_monolithic, feed_dict=feed_dict)
+outputs = rnn.sess.run(rnn.h3_mono, feed_dict=feed_dict)
 end_time = time.time()
 print "Monolithic RNN, 3 layer, elapsed_time = {} seconds.".format(end_time - start_time)
+
+start_time = time.time()
+outputs = rnn.sess.run(rnn.h4_mono, feed_dict=feed_dict)
+end_time = time.time()
+print "Monolithic RNN, 4 layer, elapsed_time = {} seconds.".format(end_time - start_time)
+
+start_time = time.time()
+outputs = rnn.sess.run(rnn.h5_mono, feed_dict=feed_dict)
+end_time = time.time()
+print "Monolithic RNN, 5 layer, elapsed_time = {} seconds.".format(end_time - start_time)
+
+
+start_time = time.time()
+outputs = rnn.sess.run(rnn.y_monolithic, feed_dict=feed_dict)
+end_time = time.time()
+print "Monolithic RNN, 6 layer, elapsed_time = {} seconds.".format(end_time - start_time)
 
 services.cleanup()
