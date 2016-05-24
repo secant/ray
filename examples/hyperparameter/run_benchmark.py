@@ -28,4 +28,4 @@ for stepsize in [1.0, 0.1, 0.01]:
     results.append(hyperparameter.f([stepsize, momentum]))
 
 for i in range(len(results)):
-  orchpy.pull(results[i])
+  op.pull(results[i])
