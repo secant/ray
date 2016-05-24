@@ -97,7 +97,6 @@ for t in range(rnn.num_steps):
 end_time = time.time()
 print "Distributed RNN, 6 layer, elapsed_time = {} seconds.".format(end_time - start_time)
 
-"""
 # Run monolithic RNN
 inputs = [np.random.normal(size=[rnn.batch_size, rnn.xdim]) for _ in range(rnn.num_steps)]
 feed_dict = dict(zip(rnn.inputs_monolithic, inputs))
@@ -131,6 +130,5 @@ start_time = time.time()
 outputs = rnn.sess.run(rnn.y_monolithic, feed_dict=feed_dict)
 end_time = time.time()
 print "Monolithic RNN, 6 layer, elapsed_time = {} seconds.".format(end_time - start_time)
-"""
 
 services.cleanup()
