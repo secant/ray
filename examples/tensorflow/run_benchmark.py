@@ -106,7 +106,7 @@ h3 = np.zeros([rnn.batch_size, rnn.h3dim])
 h4 = np.zeros([rnn.batch_size, rnn.h4dim])
 h5 = np.zeros([rnn.batch_size, rnn.h5dim])
 
-inputs = [single.random.normal([rnn.batch_size, rnn.xdim]) for _ in range(rnn.num_steps)]
+inputs = [np.random.normal([rnn.batch_size, rnn.xdim]) for _ in range(rnn.num_steps)]
 
 # Run monolithic task RNN
 start_time = time.time()
