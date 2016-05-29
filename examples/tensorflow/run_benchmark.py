@@ -112,7 +112,6 @@ inputs = [np.random.normal(size=[rnn.batch_size, rnn.xdim]) for _ in range(rnn.n
 start_time = time.time()
 for t in range(rnn.num_steps):
   h1 = rnn.first_layer_mono(inputs[t], h1)
-op.pull(h1)
 end_time = time.time()
 print "Monolithic Task RNN, 1 layer, elapsed_time = {} seconds.".format(end_time - start_time)
 
@@ -120,7 +119,6 @@ start_time = time.time()
 for t in range(rnn.num_steps):
   h1 = rnn.first_layer_mono(inputs[t], h1)
   h2 = rnn.second_layer_mono(h1, h2)
-op.pull(h2)
 end_time = time.time()
 print "Monolithic Task RNN, 2 layer, elapsed_time = {} seconds.".format(end_time - start_time)
 
@@ -129,7 +127,6 @@ for t in range(rnn.num_steps):
   h1 = rnn.first_layer_mono(inputs[t], h1)
   h2 = rnn.second_layer_mono(h1, h2)
   h3 = rnn.third_layer_mono(h2, h3)
-op.pull(h3)
 end_time = time.time()
 print "Monolithic Task RNN, 3 layer, elapsed_time = {} seconds.".format(end_time - start_time)
 
@@ -139,7 +136,6 @@ for t in range(rnn.num_steps):
   h2 = rnn.second_layer_mono(h1, h2)
   h3 = rnn.third_layer_mono(h2, h3)
   h4 = rnn.fourth_layer_mono(h3, h4)
-op.pull(h4)
 end_time = time.time()
 print "Monolithic Task RNN, 4 layer, elapsed_time = {} seconds.".format(end_time - start_time)
 
@@ -150,7 +146,6 @@ for t in range(rnn.num_steps):
   h3 = rnn.third_layer_mono(h2, h3)
   h4 = rnn.fourth_layer_mono(h3, h4)
   h5 = rnn.fifth_layer_mono(h4, h5)
-op.pull(h5)
 end_time = time.time()
 print "Monolithic Task RNN, 5 layer, elapsed_time = {} seconds.".format(end_time - start_time)
 
@@ -163,8 +158,6 @@ for t in range(rnn.num_steps):
   h4 = rnn.fourth_layer_mono(h3, h4)
   h5 = rnn.fifth_layer_mono(h4, h5)
   outputs.append(rnn.sixth_layer_mono(h5))
-for t in range(rnn.num_steps):
-  op.pull(outputs[t])
 end_time = time.time()
 print "Monolithic Task RNN, 6 layer, elapsed_time = {} seconds.".format(end_time - start_time)
 
