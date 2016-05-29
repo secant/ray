@@ -61,8 +61,6 @@ def fifth_layer_mono(h4_val, h5_val):
 def sixth_layer_mono(h5_val):
   return sess.run(y, feed_dict={h5_in: h5_val})
 
-def 
-
 h1_mono = tf.Variable(tf.zeros([batch_size, h1dim]))
 h2_mono = tf.Variable(tf.zeros([batch_size, h2dim]))
 h3_mono = tf.Variable(tf.zeros([batch_size, h3dim]))
