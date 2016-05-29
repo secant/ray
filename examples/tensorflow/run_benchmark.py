@@ -29,6 +29,7 @@ import arrays.single as single
 # time.sleep(10) # Wait to let each worker import rnn (which builds a tensorflow graph)
 op.connect("52.50.92.141:10001", "52.50.92.141:20001", "52.50.92.141:90899")
 
+"""
 h1 = single.zeros([rnn.batch_size, rnn.h1dim], "float")
 h2 = single.zeros([rnn.batch_size, rnn.h2dim], "float")
 h3 = single.zeros([rnn.batch_size, rnn.h3dim], "float")
@@ -96,13 +97,14 @@ for t in range(rnn.num_steps):
   op.pull(outputs[t])
 end_time = time.time()
 print "Distributed RNN, 6 layer, elapsed_time = {} seconds.".format(end_time - start_time)
+"""
 
 # Run monolithic task RNN
-h1 = single.zeros([rnn.batch_size, rnn.h1dim], "float")
-h2 = single.zeros([rnn.batch_size, rnn.h2dim], "float")
-h3 = single.zeros([rnn.batch_size, rnn.h3dim], "float")
-h4 = single.zeros([rnn.batch_size, rnn.h4dim], "float")
-h5 = single.zeros([rnn.batch_size, rnn.h5dim], "float")
+h1 = np.zeros([rnn.batch_size, rnn.h1dim])
+h2 = np.zeros([rnn.batch_size, rnn.h2dim])
+h3 = np.zeros([rnn.batch_size, rnn.h3dim])
+h4 = np.zeros([rnn.batch_size, rnn.h4dim])
+h5 = np.zeros([rnn.batch_size, rnn.h5dim])
 
 inputs = [single.random.normal([rnn.batch_size, rnn.xdim]) for _ in range(rnn.num_steps)]
 
