@@ -43,6 +43,26 @@ h5 = tf.matmul(h4_in, W5_p) + tf.matmul(h5_in, W5_h)
 y = tf.matmul(h5_in, W6_p)
 
 # monolithic tensorflow code
+def first_layer_mono(x_val, h1_val):
+  return sess.run(h1, feed_dict={x_in: x_val, h1_in: h1_val})
+
+def second_layer_mono(h1_val, h2_val):
+  return sess.run(h2, feed_dict={h1_in: h1_val, h2_in: h2_val})
+
+def third_layer_mono(h2_val, h3_val):
+  return sess.run(h3, feed_dict={h2_in: h2_val, h3_in: h3_val})
+
+def fourth_layer_mono(h3_val, h4_val):
+  return sess.run(h4, feed_dict={h3_in: h3_val, h4_in: h4_val})
+
+def fifth_layer_mono(h4_val, h5_val):
+  return sess.run(h5, feed_dict={h4_in: h4_val, h5_in: h5_val})
+
+def sixth_layer_mono(h5_val):
+  return sess.run(y, feed_dict={h5_in: h5_val})
+
+def 
+
 h1_mono = tf.Variable(tf.zeros([batch_size, h1dim]))
 h2_mono = tf.Variable(tf.zeros([batch_size, h2dim]))
 h3_mono = tf.Variable(tf.zeros([batch_size, h3dim]))
