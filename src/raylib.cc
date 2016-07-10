@@ -17,21 +17,30 @@ RayConfig global_ray_config;
 
 extern "C" {
 
-int PyObjectToWorker(PyObject* object, Worker **worker);
+static int PyObjectToWorker(PyObject* object, Worker **worker);
 
 // Object references
 
 typedef struct {
-    PyObject_HEAD
-    ObjRef val;
-    Worker* worker;
+  PyObject_HEAD
+  ObjRef val;
+  // We give the PyObjRef object a reference to the worker capsule object to
+  // make sure that the worker capsule does not go out of scope until all of the
+  // object references have gone out of scope. The reason for this is that the
+  // worker capsule destructor destroys the worker object. If the worker object
+  // has been destroyed, then when the object reference tries to call
+  // worker->decrement_reference_count, we can get a segfault.
+  PyObject* worker_capsule;
 } PyObjRef;
 
 static void PyObjRef_dealloc(PyObjRef *self) {
+  Worker* worker;
+  PyObjectToWorker(self->worker_capsule, &worker);
   std::vector<ObjRef> objrefs;
   objrefs.push_back(self->val);
-  self->worker->decrement_reference_count(objrefs);
+  worker->decrement_reference_count(objrefs);
   self->ob_type->tp_free((PyObject*) self);
+  Py_DECREF(self->worker_capsule); // The corresponding increment happens in PyObjRef_init.
 }
 
 static PyObject* PyObjRef_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
@@ -43,13 +52,16 @@ static PyObject* PyObjRef_new(PyTypeObject *type, PyObject *args, PyObject *kwds
 }
 
 static int PyObjRef_init(PyObjRef *self, PyObject *args, PyObject *kwds) {
-  if (!PyArg_ParseTuple(args, "iO&", &self->val, &PyObjectToWorker, &self->worker)) {
+  if (!PyArg_ParseTuple(args, "iO", &self->val, &self->worker_capsule)) {
     return -1;
   }
+  Worker* worker;
+  PyObjectToWorker(self->worker_capsule, &worker);
+  Py_INCREF(self->worker_capsule); // The corresponding decrement happens in PyObjRef_dealloc.
   std::vector<ObjRef> objrefs;
   objrefs.push_back(self->val);
   RAY_LOG(RAY_REFCOUNT, "In PyObjRef_init, calling increment_reference_count for objref " << objrefs[0]);
-  self->worker->increment_reference_count(objrefs);
+  worker->increment_reference_count(objrefs);
   return 0;
 };
 
@@ -65,8 +77,11 @@ static int PyObjRef_compare(PyObject* a, PyObject* b) {
   return 0;
 }
 
+char RAY_VAL_LITERAL[] = "val";
+char RAY_OBJECT_REFERENCE_LITERAL[] = "object reference";
+
 static PyMemberDef PyObjRef_members[] = {
-  {"val", T_INT, offsetof(PyObjRef, val), 0, "object reference"},
+  {RAY_VAL_LITERAL, T_INT, offsetof(PyObjRef, val), 0, RAY_OBJECT_REFERENCE_LITERAL},
   {NULL}
 };
 
@@ -126,7 +141,7 @@ static PyObject *RayError;
 
 // Pass arguments from Python to C++
 
-int PyObjectToTask(PyObject* object, Task **task) {
+static int PyObjectToTask(PyObject* object, Task **task) {
   if (PyCapsule_IsValid(object, "task")) {
     *task = static_cast<Task*>(PyCapsule_GetPointer(object, "task"));
     return 1;
@@ -136,7 +151,7 @@ int PyObjectToTask(PyObject* object, Task **task) {
   }
 }
 
-int PyObjectToObj(PyObject* object, Obj **obj) {
+static int PyObjectToObj(PyObject* object, Obj **obj) {
   if (PyCapsule_IsValid(object, "obj")) {
     *obj = static_cast<Obj*>(PyCapsule_GetPointer(object, "obj"));
     return 1;
@@ -146,7 +161,7 @@ int PyObjectToObj(PyObject* object, Obj **obj) {
   }
 }
 
-int PyObjectToWorker(PyObject* object, Worker **worker) {
+static int PyObjectToWorker(PyObject* object, Worker **worker) {
   if (PyCapsule_IsValid(object, "worker")) {
     *worker = static_cast<Worker*>(PyCapsule_GetPointer(object, "worker"));
     return 1;
@@ -156,7 +171,7 @@ int PyObjectToWorker(PyObject* object, Worker **worker) {
   }
 }
 
-int PyObjectToObjRef(PyObject* object, ObjRef *objref) {
+static int PyObjectToObjRef(PyObject* object, ObjRef *objref) {
   if (PyObject_IsInstance(object, (PyObject*)&PyObjRefType)) {
     *objref = ((PyObjRef*) object)->val;
     return 1;
@@ -168,17 +183,17 @@ int PyObjectToObjRef(PyObject* object, ObjRef *objref) {
 
 // Destructors
 
-void ObjCapsule_Destructor(PyObject* capsule) {
+static void ObjCapsule_Destructor(PyObject* capsule) {
   Obj* obj = static_cast<Obj*>(PyCapsule_GetPointer(capsule, "obj"));
   delete obj;
 }
 
-void WorkerCapsule_Destructor(PyObject* capsule) {
+static void WorkerCapsule_Destructor(PyObject* capsule) {
   Worker* obj = static_cast<Worker*>(PyCapsule_GetPointer(capsule, "worker"));
   delete obj;
 }
 
-void TaskCapsule_Destructor(PyObject* capsule) {
+static void TaskCapsule_Destructor(PyObject* capsule) {
   Task* obj = static_cast<Task*>(PyCapsule_GetPointer(capsule, "task"));
   delete obj;
 }
@@ -210,6 +225,7 @@ void set_dict_item_and_transfer_ownership(PyObject* dict, PyObject* key, PyObjec
 
 // serialize will serialize the python object val into the protocol buffer
 // object obj, returns 0 if successful and something else if not
+// NOTE: If some primitive types are added here, they may also need to be handled in serialization.py
 // FIXME(pcm): This currently only works for contiguous arrays
 // This method will push all of the object references contained in `obj` to the `objrefs` vector.
 int serialize(PyObject* worker_capsule, PyObject* val, Obj* obj, std::vector<ObjRef> &objrefs) {
@@ -225,6 +241,14 @@ int serialize(PyObject* worker_capsule, PyObject* val, Obj* obj, std::vector<Obj
     Int* data = obj->mutable_int_data();
     long d = PyInt_AsLong(val);
     data->set_data(d);
+  } else if (PyLong_Check(val)) {
+    // TODO(mehrdadn): We do not currently support arbitrary long values.
+    int overflow = 0;
+    Long* data = obj->mutable_long_data();
+    data->set_data(PyLong_AsLongLongAndOverflow(val, &overflow));
+    if (overflow) {
+      PyErr_SetString(RayError, "serialization: long overflow");
+    }
   } else if (PyFloat_Check(val)) {
     Double* data = obj->mutable_double_data();
     double d = PyFloat_AsDouble(val);
@@ -341,9 +365,11 @@ int serialize(PyObject* worker_capsule, PyObject* val, Obj* obj, std::vector<Obj
   break;
 
 // This method will push all of the object references contained in `obj` to the `objrefs` vector.
-PyObject* deserialize(PyObject* worker_capsule, const Obj& obj, std::vector<ObjRef> &objrefs) {
+static PyObject* deserialize(PyObject* worker_capsule, const Obj& obj, std::vector<ObjRef> &objrefs) {
   if (obj.has_int_data()) {
     return PyInt_FromLong(obj.int_data().data());
+  } else if (obj.has_long_data()) {
+    return PyLong_FromLongLong(obj.long_data().data());
   } else if (obj.has_double_data()) {
     return PyFloat_FromDouble(obj.double_data().data());
   } else if (obj.has_bool_data()) {
@@ -393,7 +419,7 @@ PyObject* deserialize(PyObject* worker_capsule, const Obj& obj, std::vector<ObjR
     for (int i = 0; i < array.shape_size(); ++i) {
       dims.push_back(array.shape(i));
     }
-    PyArrayObject* pyarray = (PyArrayObject*) PyArray_SimpleNew(array.shape_size(), &dims[0], array.dtype());
+    PyArrayObject* pyarray = (PyArrayObject*) PyArray_SimpleNew(array.shape_size(), dims.data(), array.dtype());
     switch (array.dtype()) {
       RAYLIB_DESERIALIZE_NPY(FLOAT, npy_float, float)
       RAYLIB_DESERIALIZE_NPY(DOUBLE, npy_double, double)
@@ -430,7 +456,7 @@ PyObject* deserialize(PyObject* worker_capsule, const Obj& obj, std::vector<ObjR
 }
 
 // This returns the serialized object and a list of the object references contained in that object.
-PyObject* serialize_object(PyObject* self, PyObject* args) {
+static PyObject* serialize_object(PyObject* self, PyObject* args) {
   Obj* obj = new Obj(); // TODO: to be freed in capsul destructor
   PyObject* worker_capsule;
   PyObject* pyval;
@@ -453,7 +479,7 @@ PyObject* serialize_object(PyObject* self, PyObject* args) {
   return t;
 }
 
-PyObject* put_arrow(PyObject* self, PyObject* args) {
+static PyObject* put_arrow(PyObject* self, PyObject* args) {
   Worker* worker;
   ObjRef objref;
   PyObject* value;
@@ -468,7 +494,7 @@ PyObject* put_arrow(PyObject* self, PyObject* args) {
   Py_RETURN_NONE;
 }
 
-PyObject* get_arrow(PyObject* self, PyObject* args) {
+static PyObject* get_arrow(PyObject* self, PyObject* args) {
   Worker* worker;
   ObjRef objref;
   if (!PyArg_ParseTuple(args, "O&O&", &PyObjectToWorker, &worker, &PyObjectToObjRef, &objref)) {
@@ -482,7 +508,7 @@ PyObject* get_arrow(PyObject* self, PyObject* args) {
   return val_and_segmentid;
 }
 
-PyObject* is_arrow(PyObject* self, PyObject* args) {
+static PyObject* is_arrow(PyObject* self, PyObject* args) {
   Worker* worker;
   ObjRef objref;
   if (!PyArg_ParseTuple(args, "O&O&", &PyObjectToWorker, &worker, &PyObjectToObjRef, &objref)) {
@@ -494,7 +520,7 @@ PyObject* is_arrow(PyObject* self, PyObject* args) {
     Py_RETURN_FALSE;
 }
 
-PyObject* unmap_object(PyObject* self, PyObject* args) {
+static PyObject* unmap_object(PyObject* self, PyObject* args) {
   Worker* worker;
   int segmentid;
   if (!PyArg_ParseTuple(args, "O&i", &PyObjectToWorker, &worker, &segmentid)) {
@@ -504,7 +530,7 @@ PyObject* unmap_object(PyObject* self, PyObject* args) {
   Py_RETURN_NONE;
 }
 
-PyObject* deserialize_object(PyObject* self, PyObject* args) {
+static PyObject* deserialize_object(PyObject* self, PyObject* args) {
   PyObject* worker_capsule;
   Obj* obj;
   if (!PyArg_ParseTuple(args, "OO&", &worker_capsule, &PyObjectToObj, &obj)) {
@@ -515,7 +541,7 @@ PyObject* deserialize_object(PyObject* self, PyObject* args) {
   // TODO(rkn): Should we do anything with objrefs?
 }
 
-PyObject* serialize_task(PyObject* self, PyObject* args) {
+static PyObject* serialize_task(PyObject* self, PyObject* args) {
   PyObject* worker_capsule;
   Task* task = new Task(); // TODO: to be freed in capsule destructor
   char* name;
@@ -551,7 +577,7 @@ PyObject* serialize_task(PyObject* self, PyObject* args) {
   return PyCapsule_New(static_cast<void*>(task), "task", &TaskCapsule_Destructor);
 }
 
-PyObject* deserialize_task(PyObject* self, PyObject* args) {
+static PyObject* deserialize_task(PyObject* self, PyObject* args) {
   PyObject* worker_capsule;
   Task* task;
   if (!PyArg_ParseTuple(args, "OO&", &worker_capsule, &PyObjectToTask, &task)) {
@@ -590,21 +616,23 @@ PyObject* deserialize_task(PyObject* self, PyObject* args) {
 
 // Ray Python API
 
-PyObject* create_worker(PyObject* self, PyObject* args) {
+static PyObject* create_worker(PyObject* self, PyObject* args) {
   const char* scheduler_addr;
   const char* objstore_addr;
   const char* worker_addr;
-  if (!PyArg_ParseTuple(args, "sss", &scheduler_addr, &objstore_addr, &worker_addr)) {
+  PyObject* is_driver_obj;
+  if (!PyArg_ParseTuple(args, "sssO", &scheduler_addr, &objstore_addr, &worker_addr, &is_driver_obj)) {
     return NULL;
   }
+  bool is_driver = PyObject_IsTrue(is_driver_obj);
   auto scheduler_channel = grpc::CreateChannel(scheduler_addr, grpc::InsecureChannelCredentials());
   auto objstore_channel = grpc::CreateChannel(objstore_addr, grpc::InsecureChannelCredentials());
   Worker* worker = new Worker(std::string(worker_addr), scheduler_channel, objstore_channel);
-  worker->register_worker(std::string(worker_addr), std::string(objstore_addr));
+  worker->register_worker(std::string(worker_addr), std::string(objstore_addr), is_driver);
   return PyCapsule_New(static_cast<void*>(worker), "worker", &WorkerCapsule_Destructor);
 }
 
-PyObject* disconnect(PyObject* self, PyObject* args) {
+static PyObject* disconnect(PyObject* self, PyObject* args) {
   Worker* worker;
   if (!PyArg_ParseTuple(args, "O&", &PyObjectToWorker, &worker)) {
     return NULL;
@@ -613,7 +641,7 @@ PyObject* disconnect(PyObject* self, PyObject* args) {
   Py_RETURN_NONE;
 }
 
-PyObject* connected(PyObject* self, PyObject* args) {
+static PyObject* connected(PyObject* self, PyObject* args) {
   Worker* worker;
   if (!PyArg_ParseTuple(args, "O&", &PyObjectToWorker, &worker)) {
     return NULL;
@@ -624,16 +652,20 @@ PyObject* connected(PyObject* self, PyObject* args) {
   Py_RETURN_FALSE;
 }
 
-PyObject* wait_for_next_task(PyObject* self, PyObject* args) {
+static PyObject* wait_for_next_task(PyObject* self, PyObject* args) {
   Worker* worker;
   if (!PyArg_ParseTuple(args, "O&", &PyObjectToWorker, &worker)) {
     return NULL;
   }
-  Task* task = worker->receive_next_task();
-  return PyCapsule_New(static_cast<void*>(task), "task", NULL); // This task is owned by the C++ worker class, so we do not deallocate it.
+  if (std::unique_ptr<Task> task = worker->receive_next_task()) {
+    PyObject* pyobj = PyCapsule_New(task.get(), "task", TaskCapsule_Destructor);
+    task.release(); // Now that the wrapper object was constructed successfully, release ownership
+    return pyobj;
+  }
+  Py_RETURN_NONE;
 }
 
-PyObject* submit_task(PyObject* self, PyObject* args) {
+static PyObject* submit_task(PyObject* self, PyObject* args) {
   PyObject* worker_capsule;
   Task* task;
   if (!PyArg_ParseTuple(args, "OO&", &worker_capsule, &PyObjectToTask, &task)) {
@@ -660,7 +692,7 @@ PyObject* submit_task(PyObject* self, PyObject* args) {
   return list;
 }
 
-PyObject* notify_task_completed(PyObject* self, PyObject* args) {
+static PyObject* notify_task_completed(PyObject* self, PyObject* args) {
   Worker* worker;
   PyObject* task_succeeded_obj;
   const char* error_message_ptr;
@@ -673,7 +705,7 @@ PyObject* notify_task_completed(PyObject* self, PyObject* args) {
   Py_RETURN_NONE;
 }
 
-PyObject* register_function(PyObject* self, PyObject* args) {
+static PyObject* register_function(PyObject* self, PyObject* args) {
   Worker* worker;
   const char* function_name;
   int num_return_vals;
@@ -684,7 +716,7 @@ PyObject* register_function(PyObject* self, PyObject* args) {
   Py_RETURN_NONE;
 }
 
-PyObject* get_objref(PyObject* self, PyObject* args) {
+static PyObject* get_objref(PyObject* self, PyObject* args) {
   PyObject* worker_capsule;
   if (!PyArg_ParseTuple(args, "O", &worker_capsule)) {
     return NULL;
@@ -695,7 +727,7 @@ PyObject* get_objref(PyObject* self, PyObject* args) {
   return make_pyobjref(worker_capsule, objref);
 }
 
-PyObject* put_object(PyObject* self, PyObject* args) {
+static PyObject* put_object(PyObject* self, PyObject* args) {
   Worker* worker;
   ObjRef objref;
   Obj* obj;
@@ -715,7 +747,7 @@ PyObject* put_object(PyObject* self, PyObject* args) {
   Py_RETURN_NONE;
 }
 
-PyObject* get_object(PyObject* self, PyObject* args) {
+static PyObject* get_object(PyObject* self, PyObject* args) {
   // get_object assumes that objref is a canonical objref
   Worker* worker;
   ObjRef objref;
@@ -731,7 +763,7 @@ PyObject* get_object(PyObject* self, PyObject* args) {
   return result;
 }
 
-PyObject* request_object(PyObject* self, PyObject* args) {
+static PyObject* request_object(PyObject* self, PyObject* args) {
   Worker* worker;
   ObjRef objref;
   if (!PyArg_ParseTuple(args, "O&O&", &PyObjectToWorker, &worker, &PyObjectToObjRef, &objref)) {
@@ -741,7 +773,7 @@ PyObject* request_object(PyObject* self, PyObject* args) {
   Py_RETURN_NONE;
 }
 
-PyObject* alias_objrefs(PyObject* self, PyObject* args) {
+static PyObject* alias_objrefs(PyObject* self, PyObject* args) {
   Worker* worker;
   ObjRef alias_objref;
   ObjRef target_objref;
@@ -752,7 +784,7 @@ PyObject* alias_objrefs(PyObject* self, PyObject* args) {
   Py_RETURN_NONE;
 }
 
-PyObject* start_worker_service(PyObject* self, PyObject* args) {
+static PyObject* start_worker_service(PyObject* self, PyObject* args) {
   Worker* worker;
   if (!PyArg_ParseTuple(args, "O&", &PyObjectToWorker, &worker)) {
     return NULL;
@@ -761,7 +793,7 @@ PyObject* start_worker_service(PyObject* self, PyObject* args) {
   Py_RETURN_NONE;
 }
 
-PyObject* scheduler_info(PyObject* self, PyObject* args) {
+static PyObject* scheduler_info(PyObject* self, PyObject* args) {
   Worker* worker;
   if (!PyArg_ParseTuple(args, "O&", &PyObjectToWorker, &worker)) {
     return NULL;
@@ -786,7 +818,7 @@ PyObject* scheduler_info(PyObject* self, PyObject* args) {
   return dict;
 }
 
-PyObject* task_info(PyObject* self, PyObject* args) {
+static PyObject* task_info(PyObject* self, PyObject* args) {
   Worker* worker;
   if (!PyArg_ParseTuple(args, "O&", &PyObjectToWorker, &worker)) {
     return NULL;
@@ -824,7 +856,7 @@ PyObject* task_info(PyObject* self, PyObject* args) {
   return dict;
 }
 
-PyObject* dump_computation_graph(PyObject* self, PyObject* args) {
+static PyObject* dump_computation_graph(PyObject* self, PyObject* args) {
   Worker* worker;
   const char* output_file_name;
   if (!PyArg_ParseTuple(args, "O&s", &PyObjectToWorker, &worker, &output_file_name)) {
@@ -839,7 +871,7 @@ PyObject* dump_computation_graph(PyObject* self, PyObject* args) {
   Py_RETURN_NONE;
 }
 
-PyObject* set_log_config(PyObject* self, PyObject* args) {
+static PyObject* set_log_config(PyObject* self, PyObject* args) {
   const char* log_file_name;
   if (!PyArg_ParseTuple(args, "s", &log_file_name)) {
     return NULL;
@@ -848,6 +880,19 @@ PyObject* set_log_config(PyObject* self, PyObject* args) {
   global_ray_config.log_to_file = true;
   global_ray_config.logfile.open(log_file_name);
   Py_RETURN_NONE;
+}
+
+static PyObject* kill_workers(PyObject* self, PyObject* args) {
+  Worker* worker;
+  if (!PyArg_ParseTuple(args, "O&", &PyObjectToWorker, &worker)) {
+    return NULL;
+  }
+  ClientContext context;
+  if (worker->kill_workers(context)) {
+    Py_RETURN_TRUE;
+  } else {
+    Py_RETURN_FALSE;
+  }
 }
 
 static PyMethodDef RayLibMethods[] = {
@@ -876,6 +921,7 @@ static PyMethodDef RayLibMethods[] = {
  { "task_info", task_info, METH_VARARGS, "get task statuses" },
  { "dump_computation_graph", dump_computation_graph, METH_VARARGS, "dump the current computation graph to a file" },
  { "set_log_config", set_log_config, METH_VARARGS, "set filename for raylib logging" },
+ { "kill_workers", kill_workers, METH_VARARGS, "kills all of the workers" },
  { NULL, NULL, 0, NULL }
 };
 
@@ -888,7 +934,8 @@ PyMODINIT_FUNC initlibraylib(void) {
   m = Py_InitModule3("libraylib", RayLibMethods, "Python C Extension for Ray");
   Py_INCREF(&PyObjRefType);
   PyModule_AddObject(m, "ObjRef", (PyObject *)&PyObjRefType);
-  RayError = PyErr_NewException("ray.error", NULL, NULL);
+  char ray_error[] = "ray.error";
+  RayError = PyErr_NewException(ray_error, NULL, NULL);
   Py_INCREF(RayError);
   PyModule_AddObject(m, "error", RayError);
   import_array();

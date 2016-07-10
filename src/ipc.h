@@ -4,76 +4,68 @@
 #include <iostream>
 #include <limits>
 
+#if defined(WIN32) || defined(_WIN32)
+namespace boost {
+  namespace interprocess {
+    namespace ipcdetail {
+      template<typename C, bool LazyInit = true, bool Phoenix = false>
+      class windows_intermodule_singleton;
+      struct windows_bootstamp;
+      template<>
+      class windows_intermodule_singleton<windows_bootstamp> {
+      public:
+        static windows_bootstamp get();
+      };
+    }
+  }
+}
+#endif
+
 #include <boost/interprocess/managed_shared_memory.hpp>
-#include <boost/interprocess/ipc/message_queue.hpp>
 
 #include <arrow/api.h>
 #include <arrow/ipc/memory.h>
 
 #include "ray/ray.h"
 
-using namespace boost::interprocess;
+namespace bip = boost::interprocess;
 
 // Methods for inter process communication (abstracts from the shared memory implementation)
 
 // Message Queues: Exchanging objects of type T between processes on a node
 
-template<typename T>
-class MessageQueue {
-public:
-  MessageQueue() {};
+template<typename T = void>
+class MessageQueue;
 
-  ~MessageQueue() {
-    message_queue::remove(name_.c_str());
-  }
-
-  MessageQueue(MessageQueue<T>&& other) noexcept
-    : name_(std::move(other.name_)),
-      queue_(std::move(other.queue_))
-  { }
-
-  bool connect(const std::string& name, bool create) {
-    name_ = name;
-    try {
-      if (create) {
-        message_queue::remove(name.c_str()); // remove queue if it has not been properly removed from last run
-        queue_ = std::unique_ptr<message_queue>(new message_queue(create_only, name.c_str(), 100, sizeof(T)));
-      } else {
-        queue_ = std::unique_ptr<message_queue>(new message_queue(open_only, name.c_str()));
-      }
-    } catch(interprocess_exception &ex) {
-      RAY_CHECK(false, "boost::interprocess exception: " << ex.what());
-    }
-    return true;
-  };
-
-  bool connected() {
-    return queue_ != NULL;
-  }
-
-  bool send(const T* object) {
-    try {
-      queue_->send(object, sizeof(T), 0);
-    } catch(interprocess_exception &ex) {
-      RAY_CHECK(false, "boost::interprocess exception: " << ex.what());
-    }
-    return true;
-  };
-
-  bool receive(T* object) {
-    unsigned int priority;
-    message_queue::size_type recvd_size;
-    try {
-      queue_->receive(object, sizeof(T), recvd_size, priority);
-    } catch(interprocess_exception &ex) {
-      RAY_CHECK(false, "boost::interprocess exception: " << ex.what());
-    }
-    return true;
-  }
+template<>
+class MessageQueue<> {
+protected:
+  bool connect(const std::string& name, bool create, size_t buffer_size);
+  bool connected();
+  void close();
+  ~MessageQueue();
+  MessageQueue();
+  MessageQueue(MessageQueue&& other);
+  MessageQueue& operator=(MessageQueue&& other);
+  bool send(const unsigned char* object, size_t size);;
+  bool receive(unsigned char* object, size_t size);
 
 private:
-  std::string name_;
-  std::unique_ptr<message_queue> queue_;
+#if defined(WIN32) || defined(_WIN32)
+  int handle_;
+#else
+  intptr_t handle_;
+#endif
+};
+
+template<typename T>
+class MessageQueue : public MessageQueue<> {
+public:
+  using MessageQueue<>::connected;
+  using MessageQueue<>::close;
+  bool connect(const std::string& name, bool create) { return MessageQueue<>::connect(name, create, sizeof(T)); }
+  bool send(const T* object) { return MessageQueue<>::send(reinterpret_cast<const unsigned char*>(object), sizeof(*object)); }
+  bool receive(T* object) { return MessageQueue<>::receive(reinterpret_cast<unsigned char*>(object), sizeof(*object)); }
 };
 
 // Object Queues
@@ -101,7 +93,7 @@ struct ObjRequest {
 };
 
 typedef size_t SegmentId; // index into a memory segment table
-typedef managed_shared_memory::handle_t IpcPointer;
+typedef bip::managed_shared_memory::handle_t IpcPointer;
 
 // Object handle: Handle to object that can be passed around between processes
 // that are connected to the same object store
@@ -158,8 +150,8 @@ private:
   void close_segment(SegmentId segmentid); // close a segment
   bool create_mode_; // true in the object stores, false on the workers
   ObjStoreId objstoreid_; // the identity of the associated object store
-  size_t page_size_ = mapped_region::get_page_size();
-  std::vector<std::pair<std::unique_ptr<managed_shared_memory>, SegmentStatusType> > segments_;
+  size_t page_size_ = bip::mapped_region::get_page_size();
+  std::vector<std::pair<std::unique_ptr<bip::managed_shared_memory>, SegmentStatusType> > segments_;
 };
 
 #endif

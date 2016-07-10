@@ -21,6 +21,7 @@ def load_chunk(tarfile, size=None):
   """
 
   result = []
+  labels = []
   for member in tarfile.getmembers():
     filename = member.path
     content = tarfile.extractfile(member)
@@ -30,9 +31,10 @@ def load_chunk(tarfile, size=None):
     if size != None:
       rgbimg = rgbimg.resize(size, PIL.Image.ANTIALIAS)
     result.append(np.array(rgbimg).reshape(1, rgbimg.size[0], rgbimg.size[1], 3))
-  return np.concatenate(result)
+    labels.append(filename)
+  return (np.concatenate(result), labels)
 
-@ray.remote([str, str, List[int]], [np.ndarray])
+@ray.remote([str, str, List[int]], [np.ndarray, list])
 def load_tarfile_from_s3(bucket, s3_key, size=[]):
   """Load an imagenet .tar file.
 
@@ -52,10 +54,10 @@ def load_tarfile_from_s3(bucket, s3_key, size=[]):
     output.write(chunk)
     chunk = response["Body"].read(1024 * 8)
   output.seek(0) # go to the beginning of the .tar file
-  tar = tarfile.open(mode= "r", fileobj=output)
+  tar = tarfile.open(mode="r", fileobj=output)
   return load_chunk(tar, size=size if size != [] else None)
 
-@ray.remote([str, List[str], List[int]], [List[ray.ObjRef]])
+@ray.remote([str, List[str], List[int]], [List[ray.ObjRef], List[ray.ObjRef]])
 def load_tarfiles_from_s3(bucket, s3_keys, size=[]):
   """Load a number of imagenet .tar files.
 
@@ -67,5 +69,5 @@ def load_tarfiles_from_s3(bucket, s3_keys, size=[]):
   Returns:
     np.ndarray: Contains object references to the chunks of the images (see load_chunk).
   """
-
-  return [load_tarfile_from_s3(bucket, s3_key, size) for s3_key in s3_keys]
+  images = [load_tarfile_from_s3(bucket, s3_key, size) for s3_key in s3_keys]
+  return map(lambda img:img[0], images), map(lambda img:img[1], images)

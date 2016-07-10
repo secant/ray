@@ -1,6 +1,5 @@
 import numpy as np
 import ray
-import ray.services as services
 import os
 
 import functions
@@ -11,7 +10,7 @@ epochs = 100
 
 worker_dir = os.path.dirname(os.path.abspath(__file__))
 worker_path = os.path.join(worker_dir, "worker.py")
-services.start_ray_local(num_workers=num_workers, worker_path=worker_path)
+ray.services.start_ray_local(num_workers=num_workers, worker_path=worker_path)
 
 best_params = None
 best_accuracy = 0
@@ -36,4 +35,3 @@ for i in range(samples):
     print "Best parameters are now {}.".format(params)
 
 print "Best parameters over {} samples was {}, with an accuracy of {:.4}%.".format(samples, best_params, 100 * best_accuracy)
-services.cleanup()
