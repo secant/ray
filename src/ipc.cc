@@ -68,7 +68,7 @@ bool MessageQueue<>::connect(const std::string& name, bool create, size_t messag
     }
   }
   catch (bip::interprocess_exception &ex) {
-    RAY_CHECK(false, "boost::interprocess exception: " << ex.what());
+    RAY_CHECK(false, "boost::interprocess exception: " << ex.what() << " while connecting to " << name);
   }
   return true;
 }
@@ -81,7 +81,7 @@ bool MessageQueue<>::send(const void * object, size_t size) {
     queue_->send(object, size, 0);
   }
   catch (bip::interprocess_exception &ex) {
-    RAY_CHECK(false, "boost::interprocess exception: " << ex.what());
+    RAY_CHECK(false, "boost::interprocess exception: " << ex.what() << ", queue is connected to " << name_);
   }
   return true;
 }
@@ -93,7 +93,7 @@ bool MessageQueue<>::receive(void * object, size_t size) {
     queue_->receive(object, size, recvd_size, priority);
   }
   catch (bip::interprocess_exception &ex) {
-    RAY_CHECK(false, "boost::interprocess exception: " << ex.what());
+    RAY_CHECK(false, "boost::interprocess exception: " << ex.what() << ", queue is connected to " << name_);
   }
   return true;
 }
