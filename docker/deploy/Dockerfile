@@ -2,7 +2,6 @@ FROM ubuntu:xenial
 RUN apt-get update
 RUN apt-get -y install apt-utils
 RUN apt-get -y install sudo
-RUN apt-get -y install git
 RUN apt-get install -y git cmake build-essential autoconf curl libtool python-dev python-numpy python-pip libboost-all-dev unzip graphviz
 RUN pip install ipython typing funcsigs subprocess32 protobuf==3.0.0a2 colorama graphviz cloudpickle
 RUN adduser --gecos --ingroup ray --disabled-login --gecos ray

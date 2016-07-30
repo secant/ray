@@ -1,6 +1,6 @@
 # Installation on Docker
 
-You can install Ray on any platform that runs Docker. We do not presently publish Docker images for Ray, but you can build them yourself using the Ray distribution. Using Docker can provide reliable way to get up and running quickly.
+You can install Ray on any platform that runs Docker. We do not presently publish Docker images for Ray, but you can build them yourself using the Ray distribution. Using Docker can provide a reliable way to get up and running quickly.
 
 ## Install Docker
 
