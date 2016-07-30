@@ -21,9 +21,10 @@ cd ray
 ./build-docker.sh
 ```
 
-This script creates two Docker images, one for general use and deployment and one for development use.
+This script creates several Docker images:
 
- * The `amplab/ray:deploy` has a self-contained copy of the code and is suitable for end users.
+ * The `amplab/ray:deploy` image is a self-contained copy of code and binaries suitable for end users.
+ * The `amplab/ray:examples` adds additional libraries for running examples.
  * Ray developers who want to edit locally on the host filesystem should use the `amplab/ray:devel` image, which allows local changes to be reflected immediately within the container. 
 
 ## Launch Ray in Docker
@@ -31,7 +32,7 @@ This script creates two Docker images, one for general use and deployment and on
 Start out by launching the deployment container.
 
 ```
-docker run -ti amplab/ray:deploy
+docker run --shm-size=1024m -t -i amplab/ray:deploy
 ```
 
 ## Test if the installation succeeded
@@ -52,7 +53,7 @@ These steps apply only to Ray developers who prefer to use editing tools on the 
 Launch the developer container.
 
 ```
-docker run -v `pwd`:/home/ray/ray -ti amplab/ray:devel 
+docker run -v `pwd`:/home/ray/ray --shm-size=1024m  -t -i amplab/ray:devel
 ```
 
 Build Ray inside of the container.
