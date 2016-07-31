@@ -53,7 +53,7 @@ These steps apply only to Ray developers who prefer to use editing tools on the 
 Launch the developer container.
 
 ```
-docker run -v `pwd`:/home/ray/ray --shm-size=1024m  -t -i amplab/ray:devel
+docker run -v $(pwd):/home/ray-user/ray --shm-size=1024m  -t -i amplab/ray:devel
 ```
 
 Build Ray inside of the container.
