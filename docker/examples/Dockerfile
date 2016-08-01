@@ -8,4 +8,4 @@ RUN pip install scipy
 
 # Gym
 RUN sudo apt-get -y install zlib1g-dev libjpeg-dev xvfb libav-tools xorg-dev python-opengl libsdl2-dev swig wget
-RUN pip install gym[all]
+RUN pip install gym[atari]
