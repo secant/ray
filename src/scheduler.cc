@@ -314,6 +314,7 @@ Status SchedulerService::NotifyFailure(ServerContext* context, const NotifyFailu
   } else {
     RAY_CHECK(false, "This code should be unreachable.")
   }
+  /*
   // Print the failure on the relevant driver. TODO(rkn): At the moment, this
   // prints the failure on all of the drivers. It should probably only print it
   // on the driver that caused the problem.
@@ -332,6 +333,7 @@ Status SchedulerService::NotifyFailure(ServerContext* context, const NotifyFailu
       }
     }
   }
+  */
   return Status::OK;
 }
 
