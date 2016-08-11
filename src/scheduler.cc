@@ -314,26 +314,6 @@ Status SchedulerService::NotifyFailure(ServerContext* context, const NotifyFailu
   } else {
     RAY_CHECK(false, "This code should be unreachable.")
   }
-  /*
-  // Print the failure on the relevant driver. TODO(rkn): At the moment, this
-  // prints the failure on all of the drivers. It should probably only print it
-  // on the driver that caused the problem.
-  auto workers = GET(workers_);
-  for (size_t i = 0; i < workers->size(); ++i) {
-    WorkerHandle* worker = &(*workers)[i];
-    // Check if the worker is still connected.
-    if (worker->worker_stub) {
-      // Check if this is a driver.
-      if (worker->current_task == ROOT_OPERATION) {
-        ClientContext client_context;
-        PrintErrorMessageRequest print_request;
-        print_request.mutable_failure()->CopyFrom(request->failure());
-        AckReply print_reply;
-        RAY_CHECK_GRPC(worker->worker_stub->PrintErrorMessage(&client_context, print_request, &print_reply));
-      }
-    }
-  }
-  */
   return Status::OK;
 }
 
